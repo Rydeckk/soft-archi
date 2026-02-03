@@ -38,3 +38,5 @@ Thumbs.db
 # Test coverage
 coverage/
 .nyc_output/
+/frontend/.vite/deps/_metadata.json
+/frontend/.vite/deps/package.json

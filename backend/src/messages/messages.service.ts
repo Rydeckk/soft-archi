@@ -21,7 +21,9 @@ export class MessagesService {
     const result = await this.prisma.message.findMany({
       orderBy: { createdAt: 'desc' },
     });
-    this.logger.log(`[SERVICE] Retrieved ${result.length} messages from database`);
+    this.logger.log(
+      `[SERVICE] Retrieved ${result.length} messages from database`,
+    );
     return result;
   }
 }
