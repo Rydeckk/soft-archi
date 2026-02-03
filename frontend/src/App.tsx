@@ -1,75 +1,139 @@
 import { useState, useEffect } from 'react'
+import './App.css'
 
 const API_URL = 'http://localhost:3000'
 
-interface Message {
+interface Reservation {
   id: number
-  content: string
+  guestName: string
+  start: string
+  end: string
   createdAt: string
 }
 
 function App() {
-  const [messages, setMessages] = useState<Message[]>([])
-  const [newMessage, setNewMessage] = useState('')
+  const [reservations, setReservations] = useState<Reservation[]>([])
+  const [guestName, setGuestName] = useState('')
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
 
-  const fetchMessages = async () => {
-    console.log('[FRONTEND] Fetching messages from API...')
+  const createReservation = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!guestName || !startDate || !endDate) return
+
     try {
-      const response = await fetch(`${API_URL}/messages`)
-      const data = await response.json()
-      console.log('[FRONTEND] Received messages:', data.length)
-      setMessages(data)
-    } catch (error) {
-      console.error('[FRONTEND] Error fetching messages:', error)
-    }
-  }
-
-  const createMessage = async () => {
-    if (!newMessage.trim()) return
-
-    console.log('[FRONTEND] Sending message to API:', newMessage)
-    try {
-      const response = await fetch(`${API_URL}/messages`, {
+      const response = await fetch(`${API_URL}/reservations`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ content: newMessage }),
+        body: JSON.stringify({
+          guestName,
+          start: new Date(startDate).toISOString(),
+          end: new Date(endDate).toISOString(),
+        }),
       })
 
       if (response.ok) {
-        const data = await response.json()
-        console.log('[FRONTEND] Message created:', data.id)
-        setNewMessage('')
-        await fetchMessages()
+        setGuestName('')
+        setStartDate('')
+        setEndDate('')
+        // Refresh list
+        try {
+          const res = await fetch(`${API_URL}/reservations`)
+          if (res.ok) {
+            const data = await res.json()
+            if (Array.isArray(data)) {
+              setReservations(data)
+            } else {
+              console.error('API returned non-array data:', data)
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching reservations:', error)
+        }
+      } else {
+        console.error('Failed to create reservation')
       }
     } catch (error) {
-      console.error('[FRONTEND] Error creating message:', error)
+      console.error('Error creating reservation:', error)
     }
   }
 
   useEffect(() => {
-    fetchMessages()
+    const fetchReservations = async () => {
+      try {
+        const response = await fetch(`${API_URL}/reservations`)
+        if (response.ok) {
+          const data = await response.json()
+          if (Array.isArray(data)) {
+            setReservations(data)
+          } else {
+            console.error('API returned non-array data:', data)
+            setReservations([])
+          }
+        } else {
+          console.error('Failed to fetch reservations:', response.statusText)
+        }
+      } catch (error) {
+        console.error('Error fetching reservations:', error)
+      }
+    }
+
+    void fetchReservations()
   }, [])
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', gap: '20px' }}>
-      <h1>Walking Skeleton</h1>
+    <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
+      <h1>Système de Réservation</h1>
 
-      <div>
-        <input
-          type="text"
-          value={newMessage}
-          onChange={(e) => setNewMessage(e.target.value)}
-          placeholder="Enter a message..."
-        />
-        <button onClick={createMessage}>Send</button>
-      </div>
+      <form onSubmit={(e) => { void createReservation(e) }} style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '30px' }}>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <input
+            type="text"
+            value={guestName}
+            onChange={(e) => setGuestName(e.target.value)}
+            placeholder="Nom du client"
+            required
+            style={{ flex: 1, padding: '8px' }}
+          />
+        </div>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <div style={{ flex: 1 }}>
+            <label style={{ display: 'block', marginBottom: '5px' }}>Début</label>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              required
+              style={{ width: '100%', padding: '8px' }}
+            />
+          </div>
+          <div style={{ flex: 1 }}>
+            <label style={{ display: 'block', marginBottom: '5px' }}>Fin</label>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              required
+              style={{ width: '100%', padding: '8px' }}
+            />
+          </div>
+        </div>
+        <button type="submit" style={{ padding: '10px', backgroundColor: '#646cff', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
+          Réserver
+        </button>
+      </form>
 
-      <ul>
-        {messages.map((message) => (
-          <li key={message.id}>
-            {message.content} - {new Date(message.createdAt).toLocaleString()}
+      <h2>Liste des réservations</h2>
+      <ul style={{ listStyle: 'none', padding: 0 }}>
+        {reservations.map((res) => (
+          <li key={res.id} style={{ border: '1px solid #ccc', margin: '10px 0', padding: '10px', borderRadius: '4px' }}>
+            <strong>{res.guestName}</strong>
+            <br />
+            Du: {new Date(res.start).toLocaleDateString()}
+            <br />
+            Au: {new Date(res.end).toLocaleDateString()}
           </li>
         ))}
       </ul>
