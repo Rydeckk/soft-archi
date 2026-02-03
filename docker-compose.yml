@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: parking-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: parking_user
+      POSTGRES_PASSWORD: parking_password
+      POSTGRES_DB: parking_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - parking-network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: parking-backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: "postgresql://parking_user:parking_password@postgres:5432/parking_db?schema=public"
+      PORT: 3000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - postgres
+    networks:
+      - parking-network
+
+volumes:
+  postgres_data:
+
+networks:
+  parking-network:
+    driver: bridge
