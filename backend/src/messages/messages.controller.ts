@@ -9,7 +9,9 @@ export class MessagesController {
 
   @Post()
   async create(@Body('content') content: string) {
-    this.logger.log(`[CONTROLLER] POST /messages - Creating message: "${content}"`);
+    this.logger.log(
+      `[CONTROLLER] POST /messages - Creating message: "${content}"`,
+    );
     const result = await this.messagesService.create(content);
     this.logger.log(`[CONTROLLER] Message created with ID: ${result.id}`);
     return result;
