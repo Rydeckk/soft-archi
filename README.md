@@ -30,3 +30,21 @@ To start the frontend development server:
 cd frontend
 npm run dev
 ```
+
+## Testing
+
+### Backend
+
+To run unit tests:
+
+```bash
+cd backend
+npm test
+```
+
+To run E2E tests:
+
+```bash
+cd backend
+npm run test:e2e
+```
