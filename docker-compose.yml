@@ -32,6 +32,17 @@ services:
     networks:
       - parking-network
 
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: parking-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    networks:
+      - parking-network
+
 volumes:
   postgres_data:
 

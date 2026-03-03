@@ -54,6 +54,7 @@ model Parking {
   @@map("parking")
 }
 
+
 model Reservation {
   id        String   @id @default(uuid())
   startDate DateTime @map("start_date")
