@@ -1,15 +1,21 @@
-import { IsDateString, IsNotEmpty, IsString } from 'class-validator';
+import { IsDateString, Validate } from 'class-validator';
+import {
+  DatesNotEqualConstraint,
+  EndDateAfterStartDateConstraint,
+  NotInPastConstraint,
+} from 'decorators/date-validator.decorator';
+import { CreateReservation } from 'lib/types/api/Reservation';
 
-export class CreateReservationDto {
-  @IsString()
-  @IsNotEmpty()
-  guestName: string;
+export class CreateReservationDto implements CreateReservation {
+  parkingId!: string;
 
   @IsDateString()
-  @IsNotEmpty()
-  start: string;
+  @Validate(NotInPastConstraint)
+  @Validate(DatesNotEqualConstraint)
+  startDate!: Date;
 
   @IsDateString()
-  @IsNotEmpty()
-  end: string;
+  @Validate(EndDateAfterStartDateConstraint)
+  @Validate(DatesNotEqualConstraint)
+  endDate!: Date;
 }
