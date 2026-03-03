@@ -1,32 +1,46 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { PrismaService } from '../prisma.service';
+import { Injectable } from '@nestjs/common';
 import { CreateReservationDto } from './dto/create-reservation.dto';
+import { UpdateReservationDto } from './dto/update-reservation.dto';
+import { PrismaService } from 'src/prisma.service';
 
 @Injectable()
 export class ReservationsService {
-  private readonly logger = new Logger(ReservationsService.name);
+  constructor(private prisma: PrismaService) {}
 
-  constructor(private readonly prisma: PrismaService) {}
-
-  async create(createReservationDto: CreateReservationDto) {
-    this.logger.log(
-      `Creating reservation for ${createReservationDto.guestName} from ${createReservationDto.start} to ${createReservationDto.end}`,
-    );
-    const reservation = await this.prisma.reservation.create({
+  async create(userId: string, data: CreateReservationDto) {
+    return this.prisma.reservation.create({
       data: {
-        guestName: createReservationDto.guestName,
-        start: new Date(createReservationDto.start),
-        end: new Date(createReservationDto.end),
+        ...data,
+        userId,
       },
     });
-    this.logger.log(`Reservation created with ID: ${reservation.id}`);
-    return reservation;
   }
 
-  async findAll() {
-    this.logger.log('Fetching all reservations from DB...');
-    const reservations = await this.prisma.reservation.findMany();
-    this.logger.log(`Found ${reservations.length} reservations.`);
-    return reservations;
+  async findAll(userId: string) {
+    return this.prisma.reservation.findMany({
+      where: {
+        userId,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+  }
+
+  async update(id: string, data: UpdateReservationDto) {
+    return this.prisma.reservation.update({
+      where: {
+        id,
+      },
+      data,
+    });
+  }
+
+  async remove(id: string) {
+    return this.prisma.reservation.delete({
+      where: {
+        id,
+      },
+    });
   }
 }
