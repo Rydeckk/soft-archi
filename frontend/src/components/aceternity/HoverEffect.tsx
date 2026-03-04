@@ -1,5 +1,5 @@
 "use client";
-import { cn } from "@/lib/utils";
+import { cn } from "@/utils/utils";
 import { AnimatePresence, motion } from "framer-motion";
 import { useState } from "react";
 
@@ -21,7 +21,7 @@ export const HoverEffect = ({
     <div
       className={cn(
         "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 py-10",
-        className
+        className,
       )}
     >
       {items.map((item, idx) => (
@@ -51,7 +51,11 @@ export const HoverEffect = ({
           </AnimatePresence>
           <Card>
             <div className="flex items-center gap-4 mb-4">
-              {item.icon && <div className="p-2 bg-primary/10 rounded-lg text-primary">{item.icon}</div>}
+              {item.icon && (
+                <div className="p-2 bg-primary/10 rounded-lg text-primary">
+                  {item.icon}
+                </div>
+              )}
               <CardTitle>{item.title}</CardTitle>
             </div>
             <CardDescription>{item.description}</CardDescription>
@@ -73,7 +77,7 @@ export const Card = ({
     <div
       className={cn(
         "rounded-2xl h-full w-full p-4 overflow-hidden bg-white dark:bg-black border border-transparent dark:border-white/[0.2] group-hover:border-slate-700 relative z-20",
-        className
+        className,
       )}
     >
       <div className="relative z-50">
@@ -90,7 +94,12 @@ export const CardTitle = ({
   children: React.ReactNode;
 }) => {
   return (
-    <h4 className={cn("text-slate-900 dark:text-zinc-100 font-bold tracking-wide mt-4", className)}>
+    <h4
+      className={cn(
+        "text-slate-900 dark:text-zinc-100 font-bold tracking-wide mt-4",
+        className,
+      )}
+    >
       {children}
     </h4>
   );
@@ -106,7 +115,7 @@ export const CardDescription = ({
     <p
       className={cn(
         "mt-8 text-slate-500 dark:text-zinc-400 tracking-wide leading-relaxed text-sm",
-        className
+        className,
       )}
     >
       {children}
