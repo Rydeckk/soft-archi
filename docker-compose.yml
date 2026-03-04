@@ -16,6 +16,26 @@ services:
     networks:
       - parking-network
 
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: parking-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: parking_user
+      RABBITMQ_DEFAULT_PASS: parking_password
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - parking-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   backend:
     build:
       context: ./backend
@@ -24,16 +44,49 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: "postgresql://parking_user:parking_password@postgres:5432/parking_db?schema=public"
+      RABBITMQ_URL: "amqp://parking_user:parking_password@rabbitmq:5672"
       PORT: 3000
     ports:
       - "3000:3000"
     depends_on:
-      - postgres
+      postgres:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - parking-network
+
+  mailer:
+    build:
+      context: ./mailer
+      dockerfile: Dockerfile
+    container_name: parking-mailer
+    restart: unless-stopped
+    environment:
+      RABBITMQ_URL: "amqp://parking_user:parking_password@rabbitmq:5672"
+      BREVO_API_KEY: "${BREVO_API_KEY}"
+      BREVO_SENDER_EMAIL: "${BREVO_SENDER_EMAIL}"
+      BREVO_SENDER_NAME: "${BREVO_SENDER_NAME:-Parking App}"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - parking-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: parking-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
     networks:
       - parking-network
 
 volumes:
   postgres_data:
+  rabbitmq_data:
 
 networks:
   parking-network:

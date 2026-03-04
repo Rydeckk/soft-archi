@@ -1,18 +1,51 @@
-import { Body, Controller, Get, Post } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  ParseUUIDPipe,
+  SerializeOptions,
+} from '@nestjs/common';
 import { ReservationsService } from './reservations.service';
 import { CreateReservationDto } from './dto/create-reservation.dto';
+import { UpdateReservationDto } from './dto/update-reservation.dto';
+import { GetUserPayload } from 'decorators/user.decorator';
+import { ReservationEntity } from './entities/reservation.entity';
 
 @Controller('reservations')
 export class ReservationsController {
   constructor(private readonly reservationsService: ReservationsService) {}
 
   @Post()
-  create(@Body() createReservationDto: CreateReservationDto) {
-    return this.reservationsService.create(createReservationDto);
+  @SerializeOptions({ type: ReservationEntity })
+  async create(
+    @GetUserPayload('id') userId: string,
+    @Body() createReservationDto: CreateReservationDto,
+  ) {
+    return this.reservationsService.create(userId, createReservationDto);
   }
 
   @Get()
-  findAll() {
+  @SerializeOptions({ type: ReservationEntity })
+  async findAll() {
     return this.reservationsService.findAll();
+  }
+
+  @Patch(':id')
+  @SerializeOptions({ type: ReservationEntity })
+  async update(
+    @Param('id') id: string,
+    @Body() updateReservationDto: UpdateReservationDto,
+  ) {
+    return this.reservationsService.update(id, updateReservationDto);
+  }
+
+  @Delete(':id')
+  @SerializeOptions({ type: ReservationEntity })
+  async remove(@Param('id', ParseUUIDPipe) id: string) {
+    return this.reservationsService.remove(id);
   }
 }
