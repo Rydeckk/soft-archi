@@ -46,7 +46,10 @@ import {
   XCircle,
   Zap,
   MapPin,
+  Printer,
+  QrCode,
 } from "lucide-react";
+import QRCode from "react-qr-code";
 import { cn } from "@/utils/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { useReservations } from "@/hooks/useReservations";
@@ -141,7 +144,7 @@ export function AdminPage() {
       </div>
 
       <Tabs defaultValue="users" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-3 max-w-[600px]">
+        <TabsList className="grid w-full grid-cols-4 max-w-[800px]">
           <TabsTrigger value="users" className="flex items-center gap-2">
             <Users className="h-4 w-4" />
             Utilisateurs
@@ -153,6 +156,10 @@ export function AdminPage() {
           <TabsTrigger value="reservations" className="flex items-center gap-2">
             <CalendarDays className="h-4 w-4" />
             Réservations
+          </TabsTrigger>
+          <TabsTrigger value="qrcodes" className="flex items-center gap-2">
+            <QrCode className="h-4 w-4" />
+            QR Codes
           </TabsTrigger>
         </TabsList>
 
@@ -332,6 +339,64 @@ export function AdminPage() {
                 )}
               </TableBody>
             </Table>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="qrcodes" className="space-y-4">
+          <div className="flex justify-between items-center">
+            <div>
+              <h2 className="text-xl font-semibold">QR Codes des Places</h2>
+              <p className="text-sm text-muted-foreground">
+                Imprimez ces codes et placez-les sur chaque place de parking.
+              </p>
+            </div>
+            <Button
+              onClick={() => window.print()}
+              className="gap-2 print:hidden"
+              variant="outline"
+            >
+              <Printer className="h-4 w-4" />
+              Imprimer tout
+            </Button>
+          </div>
+
+          <style>{`
+            @media print {
+              body > *:not(#qr-print-area) { display: none !important; }
+              #qr-print-area { display: block !important; }
+              .print\\:hidden { display: none !important; }
+            }
+          `}</style>
+
+          <div
+            id="qr-print-area"
+            className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-6 gap-4"
+          >
+            {(["A", "B", "C", "D", "E", "F"] as const).flatMap((code) =>
+              Array.from({ length: 10 }, (_, i) => {
+                const number = String(i + 1).padStart(2, "0");
+                const spotId = `${code}${number}`;
+                const isElectric = code === "A" || code === "F";
+                const url = `${window.location.origin}/check-in/${spotId}`;
+                return (
+                  <div
+                    key={spotId}
+                    className="flex flex-col items-center gap-2 border rounded-lg p-3 bg-white"
+                  >
+                    <div className="flex items-center gap-1">
+                      <span className="font-bold text-sm">{spotId}</span>
+                      {isElectric && (
+                        <Zap className="h-3 w-3 text-emerald-500 fill-emerald-500" />
+                      )}
+                    </div>
+                    <QRCode value={url} size={80} />
+                    <span className="text-[10px] text-muted-foreground text-center break-all">
+                      check-in/{spotId}
+                    </span>
+                  </div>
+                );
+              })
+            )}
           </div>
         </TabsContent>
       </Tabs>

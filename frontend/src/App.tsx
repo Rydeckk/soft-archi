@@ -12,9 +12,7 @@ import { LoginPage } from "@/pages/LoginPage";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { AdminPage } from "@/pages/AdminPage";
 import { StatsPage } from "@/pages/StatsPage";
-import { CheckInPage } from "@/pages/CheckInPage";
 import { HistoryPage } from "@/pages/HistoryPage";
-import HelpPage from "@/pages/HelpPage";
 
 function App() {
   return (
@@ -40,22 +38,6 @@ function App() {
                 element={
                   <Layout>
                     <HistoryPage />
-                  </Layout>
-                }
-              />
-              <Route
-                path="check-in/:spotId"
-                element={
-                  <Layout>
-                    <CheckInPage />
-                  </Layout>
-                }
-              />
-              <Route
-                path="help"
-                element={
-                  <Layout>
-                    <HelpPage />
                   </Layout>
                 }
               />

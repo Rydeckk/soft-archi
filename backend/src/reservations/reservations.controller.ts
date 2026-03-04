@@ -23,9 +23,10 @@ export class ReservationsController {
   @SerializeOptions({ type: ReservationEntity })
   async create(
     @GetUserPayload('id') userId: string,
+    @GetUserPayload('role') userRole: string,
     @Body() createReservationDto: CreateReservationDto,
   ) {
-    return this.reservationsService.create(userId, createReservationDto);
+    return this.reservationsService.create(userId, userRole as any, createReservationDto);
   }
 
   @Get()
