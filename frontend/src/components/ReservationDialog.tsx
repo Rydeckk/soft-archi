@@ -1,12 +1,18 @@
-import React, { useState } from 'react';
-import { format, addDays, isBefore, startOfToday, differenceInDays } from "date-fns";
+import { useEffect, useState } from "react";
+import {
+  format,
+  addDays,
+  isBefore,
+  startOfToday,
+  differenceInDays,
+} from "date-fns";
 import { fr } from "date-fns/locale";
 import { Calendar as CalendarIcon } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 
-import { cn } from "@/lib/utils";
+import { cn } from "@/utils/utils";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -32,33 +38,38 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { useAuth } from "@/lib/auth";
-import type { ParkingSpot } from "./ParkingMap";
+import { useAuth } from "@/hooks/useAuth";
+import type { Parking } from "@/lib/types/api/Parking";
 
 const formSchema = z.object({
   spotId: z.string().min(1, "Veuillez sélectionner une place"),
-  dateRange: z.object({
-    from: z.date(),
-    to: z.date(),
-  }).refine((data) => data.to >= data.from, {
-    message: "La date de fin doit être après la date de début",
-    path: ["to"],
-  }),
+  dateRange: z
+    .object({
+      from: z.date(),
+      to: z.date(),
+    })
+    .refine((data) => data.to >= data.from, {
+      message: "La date de fin doit être après la date de début",
+      path: ["to"],
+    }),
   isElectric: z.boolean(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
 
 interface ReservationDialogProps {
-  selectedSpot: ParkingSpot | null;
+  selectedSpot: Parking | null;
   onReserved: (data: FormValues) => void;
 }
 
-export function ReservationDialog({ selectedSpot, onReserved }: ReservationDialogProps) {
+export function ReservationDialog({
+  selectedSpot,
+  onReserved,
+}: ReservationDialogProps) {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
 
-  const maxDays = user?.role === 'MANAGER' ? 30 : 5;
+  const maxDays = user?.role === "MANAGER" ? 30 : 5;
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -73,19 +84,20 @@ export function ReservationDialog({ selectedSpot, onReserved }: ReservationDialo
   });
 
   // Update spotId when selectedSpot changes
-  React.useEffect(() => {
+  useEffect(() => {
     if (selectedSpot) {
       form.setValue("spotId", selectedSpot.id);
-      form.setValue("isElectric", selectedSpot.isElectric);
+      form.setValue("isElectric", selectedSpot.hasElectricalTerminal);
     }
   }, [selectedSpot, form]);
 
   function onSubmit(values: z.infer<typeof formSchema>) {
-    const diff = differenceInDays(values.dateRange.to, values.dateRange.from) + 1;
-    
+    const diff =
+      differenceInDays(values.dateRange.to, values.dateRange.from) + 1;
+
     if (diff > maxDays) {
-      form.setError("dateRange.to", { 
-        message: `Vous ne pouvez pas réserver plus de ${maxDays} jours consécutifs.` 
+      form.setError("dateRange.to", {
+        message: `Vous ne pouvez pas réserver plus de ${maxDays} jours consécutifs.`,
       });
       return;
     }
@@ -99,14 +111,16 @@ export function ReservationDialog({ selectedSpot, onReserved }: ReservationDialo
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button disabled={!selectedSpot} size="lg" className="w-full md:w-auto">
-          Réserver la place {selectedSpot?.id}
+          Réserver la place{" "}
+          {selectedSpot && `${selectedSpot?.code}${selectedSpot?.number}`}
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Nouvelle Réservation</DialogTitle>
           <DialogDescription>
-            Réservez votre place de parking. Maximum {maxDays} jours pour votre profil.
+            Réservez votre place de parking. Maximum {maxDays} jours pour votre
+            profil.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -118,7 +132,11 @@ export function ReservationDialog({ selectedSpot, onReserved }: ReservationDialo
                 <FormItem>
                   <FormLabel>Place sélectionnée</FormLabel>
                   <FormControl>
-                    <Button variant="outline" className="w-full justify-start font-normal" disabled>
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start font-normal"
+                      disabled
+                    >
                       {field.value || "Sélectionnez une place sur la carte"}
                     </Button>
                   </FormControl>
@@ -140,17 +158,24 @@ export function ReservationDialog({ selectedSpot, onReserved }: ReservationDialo
                           variant={"outline"}
                           className={cn(
                             "w-full pl-3 text-left font-normal",
-                            !field.value && "text-muted-foreground"
+                            !field.value && "text-muted-foreground",
                           )}
                         >
                           {field.value?.from ? (
                             field.value.to ? (
                               <>
-                                {format(field.value.from, "LLL dd, y", { locale: fr })} -{" "}
-                                {format(field.value.to, "LLL dd, y", { locale: fr })}
+                                {format(field.value.from, "LLL dd, y", {
+                                  locale: fr,
+                                })}{" "}
+                                -{" "}
+                                {format(field.value.to, "LLL dd, y", {
+                                  locale: fr,
+                                })}
                               </>
                             ) : (
-                              format(field.value.from, "LLL dd, y", { locale: fr })
+                              format(field.value.from, "LLL dd, y", {
+                                locale: fr,
+                              })
                             )
                           ) : (
                             <span>Choisir une période</span>
@@ -170,17 +195,20 @@ export function ReservationDialog({ selectedSpot, onReserved }: ReservationDialo
                         }}
                         onSelect={field.onChange}
                         numberOfMonths={2}
-                        disabled={(date) =>
-                          isBefore(date, startOfToday()) ||
-                          isBefore(addDays(startOfToday(), 30), date) // Can't book too far in future for this demo
+                        disabled={
+                          (date) =>
+                            isBefore(date, startOfToday()) ||
+                            isBefore(addDays(startOfToday(), 30), date) // Can't book too far in future for this demo
                         }
                       />
                     </PopoverContent>
                   </Popover>
                   <FormDescription>
-                    Durée sélectionnée: {field.value?.from && field.value?.to 
-                      ? differenceInDays(field.value.to, field.value.from) + 1 
-                      : 0} jour(s)
+                    Durée sélectionnée:{" "}
+                    {field.value?.from && field.value?.to
+                      ? differenceInDays(field.value.to, field.value.from) + 1
+                      : 0}{" "}
+                    jour(s)
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -188,7 +216,9 @@ export function ReservationDialog({ selectedSpot, onReserved }: ReservationDialo
             />
 
             <DialogFooter>
-              <Button type="submit" className="w-full">Confirmer la réservation</Button>
+              <Button type="submit" className="w-full">
+                Confirmer la réservation
+              </Button>
             </DialogFooter>
           </form>
         </Form>

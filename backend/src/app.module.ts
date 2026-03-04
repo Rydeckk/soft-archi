@@ -9,6 +9,7 @@ import { JwtAuthGuard } from './auth/jwtGuard/jwtAuth.guard';
 import { RolesGuard } from './auth/userGuard/roles.guard';
 import { ReservationsModule } from './reservations/reservations.module';
 import { ReservationRegisterModule } from './reservation-register/reservation-register.module';
+import { ParkingsModule } from './parkings/parkings.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { ReservationRegisterModule } from './reservation-register/reservation-re
     UsersModule,
     ReservationsModule,
     ReservationRegisterModule,
+    ParkingsModule,
   ],
   controllers: [AppController],
   providers: [

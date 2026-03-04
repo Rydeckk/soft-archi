@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Delete,
+  Get,
   Param,
   ParseUUIDPipe,
   Post,
@@ -12,10 +13,20 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UserEntity } from './entity/user.entity';
 import { Roles } from 'decorators/roles.decorator';
 import { UserRole } from 'generated/prisma/enums';
+import { GetUserPayload } from 'decorators/user.decorator';
 
 @Controller('users')
 export class UsersController {
   constructor(private userService: UsersService) {}
+
+  @Get()
+  @Roles([UserRole.SECRETARY])
+  @SerializeOptions({ type: UserEntity })
+  async getAll(@GetUserPayload('id') userId: string) {
+    return this.userService.findAll({
+      id: { not: userId },
+    });
+  }
 
   @Post()
   @Roles([UserRole.SECRETARY])

@@ -1,13 +1,5 @@
-import { useState } from 'react';
-import { useAuth } from '@/lib/auth';
-import type { Role, User } from '@/lib/auth';
-import { useReservations } from '@/lib/reservations';
-import { 
-  Tabs, 
-  TabsContent, 
-  TabsList, 
-  TabsTrigger 
-} from '@/components/ui/tabs';
+import { useState } from "react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table,
   TableBody,
@@ -24,68 +16,71 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
-import { Badge } from '@/components/ui/badge';
-import { ParkingMap } from '@/components/ParkingMap';
-import { Calendar } from '@/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { format } from 'date-fns';
-import { fr } from 'date-fns/locale';
-import { 
-  Users, 
-  Map as MapIcon, 
-  CalendarDays, 
-  Plus, 
-  Edit, 
-  Trash2, 
+import { Badge } from "@/components/ui/badge";
+import { ParkingMap } from "@/components/ParkingMap";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { format } from "date-fns";
+import { fr } from "date-fns/locale";
+import {
+  Users,
+  Map as MapIcon,
+  CalendarDays,
+  Plus,
+  Trash2,
   Calendar as CalendarIcon,
   XCircle,
-  Zap
-} from 'lucide-react';
-import { cn } from '@/lib/utils';
+  Zap,
+} from "lucide-react";
+import { cn } from "@/utils/utils";
+import { useAuth } from "@/hooks/useAuth";
+import { useReservations } from "@/hooks/useReservations";
+import type { CreateUser, User } from "@/lib/types/api/User";
+import { USER_ROLE, type UserRole } from "@/lib/enums/UserRole";
 
 export function AdminPage() {
-  const { users, createUser, updateUser, deleteUser } = useAuth();
+  const { users, createUser, deleteUser } = useAuth();
   const { reservations, cancelReservation } = useReservations();
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  
-  // User Form State
+
   const [isUserDialogOpen, setIsUserDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [formData, setFormData] = useState({ name: '', email: '', role: 'EMPLOYEE' as Role });
+  const [formData, setFormData] = useState<Omit<CreateUser, "password">>({
+    name: "",
+    email: "",
+    role: USER_ROLE.EMPLOYEE,
+  });
 
   const handleOpenAddUser = () => {
     setEditingUser(null);
-    setFormData({ name: '', email: '', role: 'EMPLOYEE' });
+    setFormData({ name: "", email: "", role: "EMPLOYEE" });
     setIsUserDialogOpen(true);
   };
 
-  const handleOpenEditUser = (user: User) => {
-    setEditingUser(user);
-    setFormData({ name: user.name, email: user.email, role: user.role });
-    setIsUserDialogOpen(true);
-  };
-
-  const handleSaveUser = () => {
-    if (editingUser) {
-      updateUser(editingUser.id, formData);
-    } else {
-      createUser(formData);
-    }
+  const handleSaveUser = async () => {
+    await createUser({
+      ...formData,
+      password: formData.email,
+    });
     setIsUserDialogOpen(false);
   };
 
   const getUserName = (userId: string) => {
-    return users.find(u => u.id === userId)?.name || 'Inconnu';
+    return users.find((u) => u.id === userId)?.name || "Inconnu";
   };
 
   return (
@@ -93,7 +88,8 @@ export function AdminPage() {
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Administration</h1>
         <p className="text-muted-foreground">
-          Gérez les utilisateurs, visualisez l'occupation du parking et modifiez les réservations.
+          Gérez les utilisateurs, visualisez l'occupation du parking et modifiez
+          les réservations.
         </p>
       </div>
 
@@ -138,16 +134,26 @@ export function AdminPage() {
                     <TableCell className="font-medium">{u.name}</TableCell>
                     <TableCell>{u.email}</TableCell>
                     <TableCell>
-                      <Badge variant={u.role === 'MANAGER' ? 'default' : u.role === 'SECRETARY' ? 'secondary' : 'outline'}>
+                      <Badge
+                        variant={
+                          u.role === "MANAGER"
+                            ? "default"
+                            : u.role === "SECRETARY"
+                              ? "secondary"
+                              : "outline"
+                        }
+                      >
                         {u.role}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                        <Button variant="ghost" size="icon" onClick={() => handleOpenEditUser(u)}>
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => deleteUser(u.id)}>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-destructive hover:text-destructive"
+                          onClick={() => deleteUser(u.id)}
+                        >
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
@@ -170,11 +176,15 @@ export function AdminPage() {
                     variant={"outline"}
                     className={cn(
                       "w-[240px] justify-start text-left font-normal",
-                      !selectedDate && "text-muted-foreground"
+                      !selectedDate && "text-muted-foreground",
                     )}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
-                    {selectedDate ? format(selectedDate, "PPP", { locale: fr }) : <span>Choisir une date</span>}
+                    {selectedDate ? (
+                      format(selectedDate, "PPP", { locale: fr })
+                    ) : (
+                      <span>Choisir une date</span>
+                    )}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="end">
@@ -193,7 +203,9 @@ export function AdminPage() {
         </TabsContent>
 
         <TabsContent value="reservations" className="space-y-4">
-          <h2 className="text-xl font-semibold">Toutes les Réservations Actives</h2>
+          <h2 className="text-xl font-semibold">
+            Toutes les Réservations Actives
+          </h2>
           <div className="border rounded-md bg-card">
             <Table>
               <TableHeader>
@@ -208,34 +220,50 @@ export function AdminPage() {
               <TableBody>
                 {reservations.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-10 text-muted-foreground">
+                    <TableCell
+                      colSpan={5}
+                      className="text-center py-10 text-muted-foreground"
+                    >
                       Aucune réservation trouvée.
                     </TableCell>
                   </TableRow>
                 ) : (
                   reservations.map((res) => (
                     <TableRow key={res.id}>
-                      <TableCell className="font-medium">{getUserName(res.userId)}</TableCell>
+                      <TableCell className="font-medium">
+                        {getUserName(res.userId)}
+                      </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <Badge variant="outline" className="font-mono">
                             {res.spotId}
                           </Badge>
-                          {res.isElectric && <Zap className="h-3 w-3 text-emerald-500 fill-emerald-500" />}
+                          {res.isElectric && (
+                            <Zap className="h-3 w-3 text-emerald-500 fill-emerald-500" />
+                          )}
                         </div>
                       </TableCell>
                       <TableCell className="text-sm">
-                        {format(res.from, "dd/MM/yyyy")} - {format(res.to, "dd/MM/yyyy")}
+                        {format(res.from, "dd/MM/yyyy")} -{" "}
+                        {format(res.to, "dd/MM/yyyy")}
                       </TableCell>
                       <TableCell>
-                        <Badge variant={res.status === 'CHECKED_IN' ? 'default' : 'secondary'}>
-                          {res.status === 'CHECKED_IN' ? 'Confirmé' : 'En attente'}
+                        <Badge
+                          variant={
+                            res.status === "CHECKED_IN"
+                              ? "default"
+                              : "secondary"
+                          }
+                        >
+                          {res.status === "CHECKED_IN"
+                            ? "Confirmé"
+                            : "En attente"}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           className="text-destructive hover:text-destructive gap-2"
                           onClick={() => cancelReservation(res.id)}
                         >
@@ -256,7 +284,9 @@ export function AdminPage() {
       <Dialog open={isUserDialogOpen} onOpenChange={setIsUserDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editingUser ? 'Modifier' : 'Ajouter'} un utilisateur</DialogTitle>
+            <DialogTitle>
+              {editingUser ? "Modifier" : "Ajouter"} un utilisateur
+            </DialogTitle>
             <DialogDescription>
               Remplissez les informations de l'employé ci-dessous.
             </DialogDescription>
@@ -264,42 +294,55 @@ export function AdminPage() {
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="name">Nom complet</Label>
-              <Input 
-                id="name" 
-                value={formData.name} 
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })} 
+              <Input
+                id="name"
+                value={formData.name}
+                onChange={(e) =>
+                  setFormData({ ...formData, name: e.target.value })
+                }
                 placeholder="Ex: Jean Dupont"
               />
             </div>
             <div className="space-y-2">
               <Label htmlFor="email">Email professionnel</Label>
-              <Input 
-                id="email" 
+              <Input
+                id="email"
                 type="email"
-                value={formData.email} 
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })} 
+                value={formData.email}
+                onChange={(e) =>
+                  setFormData({ ...formData, email: e.target.value })
+                }
                 placeholder="jean.dupont@company.com"
               />
             </div>
             <div className="space-y-2">
               <Label htmlFor="role">Rôle</Label>
-              <Select 
-                value={formData.role} 
-                onValueChange={(value) => setFormData({ ...formData, role: value as Role })}
+              <Select
+                value={formData.role}
+                onValueChange={(value: UserRole) =>
+                  setFormData({ ...formData, role: value })
+                }
               >
                 <SelectTrigger id="role">
                   <SelectValue placeholder="Sélectionnez un rôle" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="EMPLOYEE">Employé</SelectItem>
-                  <SelectItem value="SECRETARY">Secrétaire</SelectItem>
-                  <SelectItem value="MANAGER">Manager</SelectItem>
+                  <SelectItem value={USER_ROLE.EMPLOYEE}>Employé</SelectItem>
+                  <SelectItem value={USER_ROLE.SECRETARY}>
+                    Secrétaire
+                  </SelectItem>
+                  <SelectItem value={USER_ROLE.MANAGER}>Manager</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsUserDialogOpen(false)}>Annuler</Button>
+            <Button
+              variant="outline"
+              onClick={() => setIsUserDialogOpen(false)}
+            >
+              Annuler
+            </Button>
             <Button onClick={handleSaveUser}>Enregistrer</Button>
           </DialogFooter>
         </DialogContent>
