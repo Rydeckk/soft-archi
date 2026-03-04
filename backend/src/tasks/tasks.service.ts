@@ -17,8 +17,7 @@ export class TasksService {
 
     const unconfirmed = await this.prisma.reservation.findMany({
       where: {
-        startDate: { lte: todayEnd },
-        endDate: { gte: today },
+        startDate: { gte: today, lte: todayEnd },
         registers: { none: {} },
       },
     });
