@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { UserWhereUniqueInput } from 'generated/prisma/models';
+import { UserWhereInput, UserWhereUniqueInput } from 'generated/prisma/models';
 import { PrismaService } from 'src/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { hash } from 'bcrypt';
@@ -7,6 +7,12 @@ import { hash } from 'bcrypt';
 @Injectable()
 export class UsersService {
   constructor(private prisma: PrismaService) {}
+
+  async findAll(where: UserWhereInput) {
+    return this.prisma.user.findMany({
+      where,
+    });
+  }
 
   async create({ password, ...data }: CreateUserDto) {
     const hashedPassword = await hash(password, 10);

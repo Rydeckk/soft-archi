@@ -21,11 +21,8 @@ export class ReservationRegisterService {
     });
   }
 
-  async findAll(userId: string) {
+  async findAll() {
     return this.prisma.reservationRegister.findMany({
-      where: {
-        userId,
-      },
       include: {
         reservation: true,
       },

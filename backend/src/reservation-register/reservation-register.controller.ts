@@ -33,8 +33,8 @@ export class ReservationRegisterController {
 
   @Get()
   @SerializeOptions({ type: ReservationRegisterEntity })
-  findAll(@GetUserPayload('id') userId: string) {
-    return this.reservationRegisterService.findAll(userId);
+  findAll() {
+    return this.reservationRegisterService.findAll();
   }
 
   @Delete(':id')

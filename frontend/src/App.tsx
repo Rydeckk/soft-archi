@@ -1,15 +1,20 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from '@/lib/auth';
-import { ReservationProvider } from '@/lib/reservations';
-import { ProtectedRoute } from '@/components/ProtectedRoute';
-import { Layout } from '@/components/Layout';
-import { LoginPage } from '@/pages/LoginPage';
-import { DashboardPage } from '@/pages/DashboardPage';
-import { AdminPage } from '@/pages/AdminPage';
-import { StatsPage } from '@/pages/StatsPage';
-import { CheckInPage } from '@/pages/CheckInPage';
-import { HistoryPage } from '@/pages/HistoryPage';
-import HelpPage from '@/pages/HelpPage';
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Navigate,
+} from "react-router-dom";
+import { AuthProvider } from "@/contexts/AuthContext";
+import { ReservationProvider } from "@/contexts/ReservationsContext";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { Layout } from "@/components/Layout";
+import { LoginPage } from "@/pages/LoginPage";
+import { DashboardPage } from "@/pages/DashboardPage";
+import { AdminPage } from "@/pages/AdminPage";
+import { StatsPage } from "@/pages/StatsPage";
+import { CheckInPage } from "@/pages/CheckInPage";
+import { HistoryPage } from "@/pages/HistoryPage";
+import HelpPage from "@/pages/HelpPage";
 
 function App() {
   return (
@@ -22,19 +27,61 @@ function App() {
 
             {/* Protected Routes */}
             <Route element={<ProtectedRoute />}>
-              <Route index element={<Layout><DashboardPage /></Layout>} />
-              <Route path="history" element={<Layout><HistoryPage /></Layout>} />
-              <Route path="check-in/:spotId" element={<Layout><CheckInPage /></Layout>} />
-              <Route path="help" element={<Layout><HelpPage /></Layout>} />
-              
+              <Route
+                index
+                element={
+                  <Layout>
+                    <DashboardPage />
+                  </Layout>
+                }
+              />
+              <Route
+                path="history"
+                element={
+                  <Layout>
+                    <HistoryPage />
+                  </Layout>
+                }
+              />
+              <Route
+                path="check-in/:spotId"
+                element={
+                  <Layout>
+                    <CheckInPage />
+                  </Layout>
+                }
+              />
+              <Route
+                path="help"
+                element={
+                  <Layout>
+                    <HelpPage />
+                  </Layout>
+                }
+              />
+
               {/* Secretary Only */}
-              <Route element={<ProtectedRoute allowedRoles={['SECRETARY']} />}>
-                <Route path="admin" element={<Layout><AdminPage /></Layout>} />
+              <Route element={<ProtectedRoute allowedRoles={["SECRETARY"]} />}>
+                <Route
+                  path="admin"
+                  element={
+                    <Layout>
+                      <AdminPage />
+                    </Layout>
+                  }
+                />
               </Route>
 
               {/* Manager Only */}
-              <Route element={<ProtectedRoute allowedRoles={['MANAGER']} />}>
-                <Route path="stats" element={<Layout><StatsPage /></Layout>} />
+              <Route element={<ProtectedRoute allowedRoles={["MANAGER"]} />}>
+                <Route
+                  path="stats"
+                  element={
+                    <Layout>
+                      <StatsPage />
+                    </Layout>
+                  }
+                />
               </Route>
             </Route>
 

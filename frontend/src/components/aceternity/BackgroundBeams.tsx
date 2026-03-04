@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef } from "react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/utils/utils";
 
 export const BackgroundBeams = ({ className }: { className?: string }) => {
   const beamsRef = useRef<HTMLDivElement>(null);
@@ -29,7 +29,7 @@ export const BackgroundBeams = ({ className }: { className?: string }) => {
       ref={beamsRef}
       className={cn(
         "absolute inset-0 z-0 opacity-30 pointer-events-none overflow-hidden",
-        className
+        className,
       )}
       style={{
         background: `radial-gradient(600px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(var(--primary-rgb), 0.1), transparent 40%)`,

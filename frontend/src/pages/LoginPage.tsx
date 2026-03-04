@@ -1,24 +1,31 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/lib/auth';
-import type { Role } from '@/lib/auth';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
-import { Calendar } from 'lucide-react';
-import { BackgroundBeams } from '@/components/aceternity/BackgroundBeams';
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  CardFooter,
+} from "@/components/ui/card";
+import { Calendar } from "lucide-react";
+import { BackgroundBeams } from "@/components/aceternity/BackgroundBeams";
+import { useAuth } from "@/hooks/useAuth";
 
 export function LoginPage() {
-  const [email, setEmail] = useState('');
-  const [role, setRole] = useState<Role>('EMPLOYEE');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    login(email, role);
-    navigate('/');
+    await login(email, password);
+    navigate("/");
   };
 
   return (
@@ -29,7 +36,9 @@ export function LoginPage() {
           <div className="w-12 h-12 bg-primary rounded-full flex items-center justify-center mb-4 shadow-[0_0_20px_rgba(var(--primary-rgb),0.5)]">
             <Calendar className="text-primary-foreground h-6 w-6" />
           </div>
-          <CardTitle className="text-2xl text-center text-white">Connexion</CardTitle>
+          <CardTitle className="text-2xl text-center text-white">
+            Connexion
+          </CardTitle>
           <CardDescription className="text-center text-slate-400">
             Entrez vos identifiants pour accéder à votre espace
           </CardDescription>
@@ -37,33 +46,41 @@ export function LoginPage() {
         <form onSubmit={handleSubmit}>
           <CardContent className="grid gap-4">
             <div className="grid gap-2">
-              <Label htmlFor="email" className="text-slate-200">Email</Label>
-              <Input 
-                id="email" 
-                type="email" 
-                placeholder="m@example.com" 
+              <Label htmlFor="email" className="text-slate-200">
+                Email
+              </Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="email@gmail.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                required 
+                required
                 className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="role" className="text-slate-200">Rôle (Simulation)</Label>
-              <select 
-                id="role"
-                className="flex h-10 w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white ring-offset-slate-950 file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                value={role}
-                onChange={(e) => setRole(e.target.value as Role)}
-              >
-                <option value="EMPLOYEE">Employé</option>
-                <option value="SECRETARY">Secrétaire</option>
-                <option value="MANAGER">Manager</option>
-              </select>
+              <Label htmlFor="password" className="text-slate-200">
+                Password
+              </Label>
+              <Input
+                id="password"
+                type="password"
+                placeholder="Password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
+              />
             </div>
           </CardContent>
           <CardFooter>
-            <Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold" type="submit">Se connecter</Button>
+            <Button
+              className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold"
+              type="submit"
+            >
+              Se connecter
+            </Button>
           </CardFooter>
         </form>
       </Card>

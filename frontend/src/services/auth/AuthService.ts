@@ -1,0 +1,20 @@
+import type { LoginRequest, LoginResponse } from "@/lib/types/api/Login";
+import { Api } from "../api/Api";
+
+const AUTH_PATH = "auth";
+
+export class AuthService {
+  private api: Api;
+
+  constructor({ api = new Api() }: { api?: Api } = {}) {
+    this.api = api;
+  }
+
+  async login(data: LoginRequest) {
+    return this.api.request<LoginResponse>({
+      path: `${AUTH_PATH}/login`,
+      method: "POST",
+      data,
+    });
+  }
+}
