@@ -24,6 +24,7 @@ interface ParkingMapProps {
   className?: string;
   date?: Date;
   showOnlyElectric?: boolean;
+  refreshTrigger?: number;
 }
 
 export function ParkingMap({
@@ -32,6 +33,7 @@ export function ParkingMap({
   className,
   date = new Date(),
   showOnlyElectric = false,
+  refreshTrigger = 0,
 }: ParkingMapProps) {
   const [parkings, setParkings] = useState<Parking[]>([]);
   const [reservationsData, setReservationsData] = useState<Reservation[]>([]);
@@ -81,7 +83,7 @@ export function ParkingMap({
       setParkings(parkingsData);
     };
     getParkings();
-  }, [parkingService, reservationService, reservationRegisterService]);
+  }, [parkingService, reservationService, reservationRegisterService, refreshTrigger]);
 
   return (
     <div

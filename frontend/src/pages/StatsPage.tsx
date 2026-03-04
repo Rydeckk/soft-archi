@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from "react";
 import {
   Card,
   CardHeader,
@@ -5,243 +6,393 @@ import {
   CardContent,
   CardDescription,
 } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import ReactECharts from "echarts-for-react";
 import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip as ReChartsTooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  Legend,
-} from "recharts";
-import { subDays, format, isSameDay } from "date-fns";
+  subDays,
+  startOfDay,
+  endOfDay,
+  isAfter,
+  isBefore,
+  format,
+  eachDayOfInterval,
+} from "date-fns";
 import { fr } from "date-fns/locale";
-import { useReservations } from "@/hooks/useReservations";
+import { ReservationService } from "@/services/reservation/ReservationService";
+import { ReservationRegisterService } from "@/services/reservationRegister/ReservationRegisterService";
+import { ParkingService } from "@/services/parking/ParkingService";
+import type { Reservation } from "@/lib/types/api/Reservation";
+import type { ReservationRegister } from "@/lib/types/api/ReservationRegister";
+import type { Parking } from "@/lib/types/api/Parking";
+
+const TOTAL_SPOTS = 60;
+
+type Period = "day" | "week" | "month";
+
+function getPeriodDays(period: Period) {
+  const today = new Date();
+  switch (period) {
+    case "day":
+      return eachDayOfInterval({ start: today, end: today });
+    case "week":
+      return eachDayOfInterval({ start: subDays(today, 6), end: today });
+    case "month":
+      return eachDayOfInterval({ start: subDays(today, 29), end: today });
+  }
+}
+
+function isInPeriod(date: Date, period: Period): boolean {
+  const now = new Date();
+  const start = period === "day" ? startOfDay(now) : period === "week" ? startOfDay(subDays(now, 6)) : startOfDay(subDays(now, 29));
+  return !isBefore(date, start) && !isAfter(date, endOfDay(now));
+}
+
+function reservationOverlapsDay(res: Reservation, day: Date): boolean {
+  const start = startOfDay(day);
+  const end = endOfDay(day);
+  const resStart = new Date(res.startDate);
+  const resEnd = new Date(res.endDate);
+  return !isAfter(resStart, end) && !isBefore(resEnd, start);
+}
 
 export function StatsPage() {
-  const { history, reservations } = useReservations();
-  const allData = [...history, ...reservations];
+  const [period, setPeriod] = useState<Period>("week");
+  const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [registers, setRegisters] = useState<ReservationRegister[]>([]);
+  const [parkings, setParkings] = useState<Parking[]>([]);
 
-  // 1. Occupation sur les 7 derniers jours
-  const last7Days = Array.from({ length: 7 }, (_, i) =>
-    subDays(new Date(), 6 - i),
-  );
-  const occupationData = last7Days.map((day) => {
-    const dayReservations = allData.filter((r) => isSameDay(r.from, day));
-    const confirmed = dayReservations.filter(
-      (r) => r.status === "CHECKED_IN" || r.status === "COMPLETED",
-    ).length;
-    const pending = dayReservations.filter(
-      (r) => r.status === "PENDING",
-    ).length;
-    const expired = dayReservations.filter(
-      (r) => r.status === "EXPIRED",
-    ).length;
+  const reservationService = useMemo(() => new ReservationService(), []);
+  const registerService = useMemo(() => new ReservationRegisterService(), []);
+  const parkingService = useMemo(() => new ParkingService(), []);
+
+  useEffect(() => {
+    Promise.all([
+      reservationService.findAll(),
+      registerService.findAll(),
+      parkingService.findAll(),
+    ]).then(([res, reg, park]) => {
+      setReservations(res);
+      setRegisters(reg);
+      setParkings(park);
+    });
+  }, [reservationService, registerService, parkingService]);
+
+  const days = getPeriodDays(period);
+
+  // --- KPI computations ---
+
+  // 1. Personnes utilisant le parking (unique users with active reservation in period)
+  const activeUsersInPeriod = useMemo(() => {
+    const userIds = new Set(
+      reservations
+        .filter((res) => {
+          const start = new Date(res.startDate);
+          const end = new Date(res.endDate);
+          const periodStart = period === "day"
+            ? startOfDay(new Date())
+            : period === "week"
+              ? startOfDay(subDays(new Date(), 6))
+              : startOfDay(subDays(new Date(), 29));
+          const periodEnd = endOfDay(new Date());
+          return !isAfter(start, periodEnd) && !isBefore(end, periodStart);
+        })
+        .map((r) => r.userId),
+    );
+    return userIds.size;
+  }, [reservations, period]);
+
+  // 2. Taux d'occupation moyen (avg % spots used per day over period)
+  const avgOccupancy = useMemo(() => {
+    if (days.length === 0) return 0;
+    const rates = days.map((day) => {
+      const active = reservations.filter((res) => reservationOverlapsDay(res, day)).length;
+      return (active / TOTAL_SPOTS) * 100;
+    });
+    return Math.round(rates.reduce((a, b) => a + b, 0) / rates.length);
+  }, [reservations, days]);
+
+  // 3. No-show proportion (expired reservations without check-in in period)
+  const noShowRate = useMemo(() => {
+    const periodStart =
+      period === "day"
+        ? startOfDay(new Date())
+        : period === "week"
+          ? startOfDay(subDays(new Date(), 6))
+          : startOfDay(subDays(new Date(), 29));
+    const now = new Date();
+
+    const completed = reservations.filter((res) => {
+      const end = new Date(res.endDate);
+      return !isAfter(new Date(res.startDate), endOfDay(now)) && !isBefore(end, periodStart);
+    });
+
+    if (completed.length === 0) return 0;
+
+    const checkedInIds = new Set(registers.map((r) => r.reservationId));
+    const noShows = completed.filter((res) => !checkedInIds.has(res.id));
+    return Math.round((noShows.length / completed.length) * 100);
+  }, [reservations, registers, period]);
+
+  // 4. Proportion places électriques (electric spots / total)
+  const electricProportion = useMemo(() => {
+    const electricSpots = parkings.filter((p) => p.hasElectricalTerminal).length;
+    return parkings.length > 0
+      ? Math.round((electricSpots / parkings.length) * 100)
+      : 0;
+  }, [parkings]);
+
+  // --- Chart data ---
+
+  // Occupation par jour
+  const occupationChartOption = useMemo(() => {
+    const labels = days.map((d) =>
+      period === "day"
+        ? format(d, "HH:mm", { locale: fr })
+        : period === "month"
+          ? format(d, "dd/MM", { locale: fr })
+          : format(d, "EEE dd", { locale: fr }),
+    );
+
+    const checkedInData = days.map((day) =>
+      reservations.filter((res) => {
+        const reg = registers.find((r) => r.reservationId === res.id);
+        return reg && reservationOverlapsDay(res, day);
+      }).length,
+    );
+
+    const pendingData = days.map((day) =>
+      reservations.filter((res) => {
+        const reg = registers.find((r) => r.reservationId === res.id);
+        return !reg && reservationOverlapsDay(res, day) && !isBefore(new Date(res.endDate), startOfDay(day));
+      }).length,
+    );
 
     return {
-      name: format(day, "EEE dd", { locale: fr }),
-      occupée: confirmed,
-      en_attente: pending,
-      expirée: expired,
+      tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
+      legend: { data: ["Confirmé", "En attente"], bottom: 0 },
+      grid: { left: "3%", right: "4%", bottom: "15%", containLabel: true },
+      xAxis: { type: "category", data: labels },
+      yAxis: { type: "value", name: "Places" },
+      series: [
+        {
+          name: "Confirmé",
+          type: "bar",
+          stack: "total",
+          data: checkedInData,
+          itemStyle: { color: "#10b981" },
+        },
+        {
+          name: "En attente",
+          type: "bar",
+          stack: "total",
+          data: pendingData,
+          itemStyle: { color: "#f59e0b" },
+        },
+      ],
     };
-  });
+  }, [days, reservations, registers, period]);
 
-  // 2. Répartition Électrique vs Standard
-  const electricUsage = allData.filter(
-    (r) =>
-      r.isElectric && (r.status === "CHECKED_IN" || r.status === "COMPLETED"),
-  ).length;
-  const standardUsage = allData.filter(
-    (r) =>
-      !r.isElectric && (r.status === "CHECKED_IN" || r.status === "COMPLETED"),
-  ).length;
+  // No-show donut
+  const noShowChartOption = useMemo(() => ({
+    tooltip: { trigger: "item" },
+    series: [
+      {
+        type: "pie",
+        radius: ["50%", "70%"],
+        avoidLabelOverlap: false,
+        label: { show: false },
+        emphasis: { label: { show: true, fontSize: 14, fontWeight: "bold" } },
+        data: [
+          { value: noShowRate, name: "No-show", itemStyle: { color: "#ef4444" } },
+          { value: 100 - noShowRate, name: "Utilisé", itemStyle: { color: "#10b981" } },
+        ],
+      },
+    ],
+  }), [noShowRate]);
 
-  const pieData = [
-    { name: "Électrique", value: electricUsage },
-    { name: "Standard", value: standardUsage },
+  // Electric proportion donut
+  const electricChartOption = useMemo(() => {
+    const electricSpots = parkings.filter((p) => p.hasElectricalTerminal).length;
+    const standardSpots = parkings.length - electricSpots;
+    return {
+      tooltip: { trigger: "item" },
+      series: [
+        {
+          type: "pie",
+          radius: ["50%", "70%"],
+          avoidLabelOverlap: false,
+          label: { show: false },
+          emphasis: { label: { show: true, fontSize: 14, fontWeight: "bold" } },
+          data: [
+            { value: electricSpots, name: "Électrique", itemStyle: { color: "#10b981" } },
+            { value: standardSpots, name: "Standard", itemStyle: { color: "#3b82f6" } },
+          ],
+        },
+      ],
+    };
+  }, [parkings]);
+
+  const periods: { label: string; value: Period }[] = [
+    { label: "Jour", value: "day" },
+    { label: "Semaine", value: "week" },
+    { label: "Mois", value: "month" },
   ];
-  const COLORS = ["#10b981", "#3b82f6"];
-
-  // 3. Taux de No-Show
-  const totalPlanned = allData.filter(
-    (r) =>
-      r.status === "CHECKED_IN" ||
-      r.status === "COMPLETED" ||
-      r.status === "EXPIRED",
-  ).length;
-  const expiredCount = allData.filter((r) => r.status === "EXPIRED").length;
-  const noShowRate =
-    totalPlanned > 0 ? Math.round((expiredCount / totalPlanned) * 100) : 0;
-
-  // 4. KPIs
-  const totalReservations = allData.length;
-  const currentMonthOccupancy = Math.round(
-    (allData.filter(
-      (r) =>
-        (r.status === "CHECKED_IN" || r.status === "COMPLETED") &&
-        r.from.getMonth() === new Date().getMonth(),
-    ).length /
-      (60 * 30)) *
-      100,
-  ); // Approximation mois de 30 jours, 60 places
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-bold tracking-tight">
-          Tableau de bord Manager
-        </h1>
-        <p className="text-muted-foreground">
-          Analyse des performances et de l'utilisation du parking.
-        </p>
+    <div className="space-y-6 pb-10">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">
+            Tableau de bord Manager
+          </h1>
+          <p className="text-muted-foreground">
+            Analyse des performances et de l'utilisation du parking.
+          </p>
+        </div>
+        <div className="flex gap-2">
+          {periods.map((p) => (
+            <Button
+              key={p.value}
+              variant={period === p.value ? "default" : "outline"}
+              size="sm"
+              onClick={() => setPeriod(p.value)}
+            >
+              {p.label}
+            </Button>
+          ))}
+        </div>
       </div>
 
+      {/* KPI Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Total Réservations
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Personnes utilisant le parking
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalReservations}</div>
-            <p className="text-xs text-muted-foreground">
-              (Toutes périodes confondues)
+            <div className="text-3xl font-bold">{activeUsersInPeriod}</div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Utilisateurs uniques sur la période
             </p>
           </CardContent>
         </Card>
+
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Taux de No-Show
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Taux d'occupation moyen
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-500">{noShowRate}%</div>
-            <p className="text-xs text-muted-foreground">
-              Réservations expirées non confirmées
+            <div className="text-3xl font-bold">{avgOccupancy}%</div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Moyenne sur {days.length} jour{days.length > 1 ? "s" : ""}
             </p>
           </CardContent>
         </Card>
+
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Occupation estimée
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Taux de no-show
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {currentMonthOccupancy || 0}%
+            <div className="text-3xl font-bold text-red-500">{noShowRate}%</div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Réservations sans check-in
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Places électriques
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-emerald-600">
+              {electricProportion}%
             </div>
-            <p className="text-xs text-muted-foreground">
-              Sur le mois en cours
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Usage Bornes</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-emerald-600">
-              {electricUsage}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Utilisations des places A/F
+            <p className="text-xs text-muted-foreground mt-1">
+              {parkings.filter((p) => p.hasElectricalTerminal).length} /{" "}
+              {parkings.length} places équipées
             </p>
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-        <Card className="col-span-4">
+      {/* Charts */}
+      <div className="grid gap-4 md:grid-cols-7">
+        <Card className="md:col-span-4">
           <CardHeader>
-            <CardTitle>Activités des 7 derniers jours</CardTitle>
+            <CardTitle>Occupation du parking</CardTitle>
             <CardDescription>
-              Nombre de places occupées, expirées et en attente.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="pl-2">
-            <div className="h-[350px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={occupationData}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="name" />
-                  <YAxis />
-                  <ReChartsTooltip />
-                  <Legend />
-                  <Bar
-                    dataKey="occupée"
-                    stackId="a"
-                    fill="#10b981"
-                    name="Confirmée"
-                  />
-                  <Bar
-                    dataKey="en_attente"
-                    stackId="a"
-                    fill="#f59e0b"
-                    name="En attente"
-                  />
-                  <Bar
-                    dataKey="expirée"
-                    stackId="a"
-                    fill="#ef4444"
-                    name="Expirée"
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="col-span-3">
-          <CardHeader>
-            <CardTitle>Répartition des Véhicules</CardTitle>
-            <CardDescription>
-              Proportion d'utilisation des bornes électriques.
+              Nombre de places réservées par jour sur la période sélectionnée.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={pieData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={80}
-                    paddingAngle={5}
-                    dataKey="value"
-                  >
-                    {pieData.map((_entry, index) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={COLORS[index % COLORS.length]}
-                      />
-                    ))}
-                  </Pie>
-                  <ReChartsTooltip />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="mt-4 text-sm text-muted-foreground text-center">
-              Les places électriques (A et F) représentent{" "}
-              {electricUsage + standardUsage > 0
-                ? Math.round(
-                    (electricUsage / (electricUsage + standardUsage)) * 100,
-                  )
-                : 0}
-              % de l'occupation totale.
+            <ReactECharts option={occupationChartOption} style={{ height: 320 }} />
+          </CardContent>
+        </Card>
+
+        <Card className="md:col-span-3">
+          <CardHeader>
+            <CardTitle>No-shows</CardTitle>
+            <CardDescription>
+              Proportion de réservations sans check-in effectué.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col items-center gap-2">
+            <ReactECharts option={noShowChartOption} style={{ height: 200, width: "100%" }} />
+            <div className="flex gap-6 text-sm">
+              <span className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded-full bg-red-500 inline-block" />
+                No-show ({noShowRate}%)
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded-full bg-emerald-500 inline-block" />
+                Utilisé ({100 - noShowRate}%)
+              </span>
             </div>
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Répartition des places</CardTitle>
+          <CardDescription>
+            Proportion des places équipées de bornes électriques (rangées A et F).
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col md:flex-row items-center gap-6">
+          <ReactECharts option={electricChartOption} style={{ height: 220, width: 220 }} />
+          <div className="flex flex-col gap-3 text-sm">
+            <div className="flex items-center gap-3">
+              <span className="w-4 h-4 rounded bg-emerald-500 inline-block shrink-0" />
+              <div>
+                <div className="font-medium">Places électriques</div>
+                <div className="text-muted-foreground">
+                  {parkings.filter((p) => p.hasElectricalTerminal).length} places — rangées A et F
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="w-4 h-4 rounded bg-blue-500 inline-block shrink-0" />
+              <div>
+                <div className="font-medium">Places standard</div>
+                <div className="text-muted-foreground">
+                  {parkings.filter((p) => !p.hasElectricalTerminal).length} places — rangées B à E
+                </div>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

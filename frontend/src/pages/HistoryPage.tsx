@@ -7,7 +7,6 @@ import {
   MapPin,
   Calendar,
   CheckCircle2,
-  XCircle,
   Clock,
 } from "lucide-react";
 import { useReservations } from "@/hooks/useReservations";
@@ -15,8 +14,7 @@ import { useReservations } from "@/hooks/useReservations";
 export function HistoryPage() {
   const { history, reservations } = useReservations();
 
-  // Combine active and past for a full view, or just past
-  const allHistory = [...history].sort(
+  const sortedHistory = [...history].sort(
     (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
   );
 
@@ -35,15 +33,6 @@ export function HistoryPage() {
             className="bg-red-100 text-red-700 hover:bg-red-100 border-red-200"
           >
             <Clock className="h-3 w-3 mr-1" /> Expiré
-          </Badge>
-        );
-      case "CANCELLED":
-        return (
-          <Badge
-            variant="outline"
-            className="bg-slate-100 text-slate-700 border-slate-200"
-          >
-            <XCircle className="h-3 w-3 mr-1" /> Annulé
           </Badge>
         );
       default:
@@ -72,14 +61,16 @@ export function HistoryPage() {
                 <CardContent className="p-4 flex items-center justify-between">
                   <div className="flex items-center gap-4">
                     <div className="h-10 w-10 rounded bg-primary/10 flex items-center justify-center font-bold text-primary">
-                      {res.spotId}
+                      {res.parkingCode}
                     </div>
                     <div>
-                      <p className="text-sm font-medium">Place {res.spotId}</p>
+                      <p className="text-sm font-medium">
+                        Place {res.parkingCode}
+                      </p>
                       <p className="text-xs text-muted-foreground flex items-center gap-1">
                         <Calendar className="h-3 w-3" />
-                        {format(res.from, "dd MMM", { locale: fr })} -{" "}
-                        {format(res.to, "dd MMM", { locale: fr })}
+                        {format(res.startDate, "dd MMM", { locale: fr })} -{" "}
+                        {format(res.endDate, "dd MMM", { locale: fr })}
                       </p>
                     </div>
                   </div>
@@ -105,32 +96,36 @@ export function HistoryPage() {
             <div className="w-2 h-2 rounded-full bg-slate-400" />
             Archives
           </h2>
-          {allHistory.length === 0 ? (
+          {sortedHistory.length === 0 ? (
             <Card className="bg-muted/50 border-dashed">
               <CardContent className="p-8 text-center text-muted-foreground">
                 <p>Aucun historique disponible pour le moment.</p>
               </CardContent>
             </Card>
           ) : (
-            allHistory.map((res) => (
+            sortedHistory.map((res) => (
               <Card key={res.id} className="opacity-80">
                 <CardContent className="p-4 flex items-center justify-between">
                   <div className="flex items-center gap-4">
                     <div className="h-10 w-10 rounded bg-muted flex items-center justify-center font-bold text-muted-foreground">
-                      {res.spotId}
+                      {res.parkingCode}
                     </div>
                     <div>
-                      <p className="text-sm font-medium">Place {res.spotId}</p>
+                      <p className="text-sm font-medium">
+                        Place {res.parkingCode}
+                      </p>
                       <p className="text-xs text-muted-foreground flex items-center gap-1">
                         <Calendar className="h-3 w-3" />
-                        {format(res.from, "dd MMM yyyy", { locale: fr })}
+                        {format(res.startDate, "dd MMM yyyy", { locale: fr })}{" "}
+                        - {format(res.endDate, "dd MMM yyyy", { locale: fr })}
                       </p>
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-1">
                     {getStatusBadge(res.status)}
                     <span className="text-[10px] text-muted-foreground flex items-center gap-1">
-                      <MapPin className="h-2 w-2" /> Rangée {res.spotId[0]}
+                      <MapPin className="h-2 w-2" /> Rangée{" "}
+                      {res.parkingCode[0]}
                     </span>
                   </div>
                 </CardContent>

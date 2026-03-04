@@ -1,203 +1,236 @@
-import React, { createContext, useState, useEffect } from "react";
+import React, {
+  createContext,
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+} from "react";
 import {
   isSameDay,
+  startOfToday,
   isBefore,
-  setHours,
-  setMinutes,
-  areIntervalsOverlapping,
+  isAfter,
   startOfDay,
   endOfDay,
 } from "date-fns";
 import { useAuth } from "@/hooks/useAuth";
+import { ReservationService } from "@/services/reservation/ReservationService";
+import { ReservationRegisterService } from "@/services/reservationRegister/ReservationRegisterService";
+import { ParkingService } from "@/services/parking/ParkingService";
+import type { Parking } from "@/lib/types/api/Parking";
+import type { Reservation } from "@/lib/types/api/Reservation";
+import type { ReservationRegister } from "@/lib/types/api/ReservationRegister";
+import { toast } from "sonner";
+import { ApiException } from "@/services/api/ApiException";
 
-type ReservationStatus =
-  | "PENDING"
-  | "CHECKED_IN"
-  | "EXPIRED"
-  | "CANCELLED"
-  | "COMPLETED";
+type ReservationStatus = "PENDING" | "CHECKED_IN" | "EXPIRED";
 
-interface Reservation {
+export type EnrichedReservation = {
   id: string;
   userId: string;
-  spotId: string;
-  from: Date;
-  to: Date;
+  parkingId: string;
+  parkingCode: string;
+  startDate: Date;
+  endDate: Date;
   isElectric: boolean;
   status: ReservationStatus;
   createdAt: Date;
-}
+  checkInId?: string;
+};
 
 interface ReservationContextType {
-  reservations: Reservation[];
-  history: Reservation[];
+  reservations: EnrichedReservation[];
+  history: EnrichedReservation[];
+  allReservations: EnrichedReservation[];
+  isLoading: boolean;
   addReservation: (
-    data: Omit<Reservation, "id" | "userId" | "status" | "createdAt">,
-  ) => void;
-  updateReservation: (id: string, data: Partial<Reservation>) => void;
-  checkIn: (reservationId: string) => void;
-  checkInBySpot: (spotId: string) => void;
-  cancelReservation: (reservationId: string) => void;
+    parkingId: string,
+    startDate: Date,
+    endDate: Date,
+  ) => Promise<void>;
+  cancelReservation: (id: string) => Promise<void>;
+  updateReservation: (id: string, parkingId: string) => Promise<void>;
+  checkIn: (reservationId: string) => Promise<void>;
+  checkInBySpot: (parkingCode: string) => Promise<void>;
   getReservationBySpot: (
-    spotId: string,
+    parkingCode: string,
     date?: Date,
-  ) => Reservation | undefined;
-  getReservationsByDate: (date: Date) => Reservation[];
+  ) => EnrichedReservation | undefined;
+  getReservationsByDate: (date: Date) => EnrichedReservation[];
 }
 
 const ReservationContext = createContext<ReservationContextType | undefined>(
   undefined,
 );
 
+function buildEnrichedReservation(
+  res: Reservation,
+  parkings: Parking[],
+  registers: ReservationRegister[],
+): EnrichedReservation {
+  const parking = parkings.find((p) => p.id === res.parkingId);
+  const parkingCode = parking
+    ? `${parking.code}${parking.number}`
+    : res.parkingId;
+  const isElectric = parking?.hasElectricalTerminal ?? false;
+  const checkIn = registers.find((r) => r.reservationId === res.id);
+
+  const startDate = new Date(res.startDate);
+  const endDate = new Date(res.endDate);
+  const today = startOfToday();
+
+  let status: ReservationStatus;
+  if (checkIn) {
+    status = "CHECKED_IN";
+  } else if (isBefore(endDate, today)) {
+    status = "EXPIRED";
+  } else {
+    status = "PENDING";
+  }
+
+  return {
+    id: res.id,
+    userId: res.userId,
+    parkingId: res.parkingId,
+    parkingCode,
+    startDate,
+    endDate,
+    isElectric,
+    status,
+    createdAt: new Date(res.createdAt),
+    checkInId: checkIn?.id,
+  };
+}
+
 const ReservationProvider = ({ children }: { children: React.ReactNode }) => {
   const { user } = useAuth();
-  const [reservations, setReservations] = useState<Reservation[]>([]);
-  const [history, setHistory] = useState<Reservation[]>([]);
+  const [allReservations, setAllReservations] = useState<EnrichedReservation[]>(
+    [],
+  );
+  const [isLoading, setIsLoading] = useState(false);
 
-  // Persist reservations
-  useEffect(() => {
-    const updateReduxStore = () => {
-      const stored = localStorage.getItem("all_reservations");
-      const storedHistory = localStorage.getItem("reservations_history");
-      if (stored) {
-        setReservations(
-          JSON.parse(stored).map((r: any) => ({
-            ...r,
-            from: new Date(r.from),
-            to: new Date(r.to),
-            createdAt: new Date(r.createdAt),
-          })),
-        );
-      }
-      if (storedHistory) {
-        setHistory(
-          JSON.parse(storedHistory).map((r: any) => ({
-            ...r,
-            from: new Date(r.from),
-            to: new Date(r.to),
-            createdAt: new Date(r.createdAt),
-          })),
-        );
-      }
-    };
-    updateReduxStore();
-  }, []);
+  const reservationService = useMemo(() => new ReservationService(), []);
+  const reservationRegisterService = useMemo(
+    () => new ReservationRegisterService(),
+    [],
+  );
+  const parkingService = useMemo(() => new ParkingService(), []);
 
-  useEffect(() => {
-    localStorage.setItem("all_reservations", JSON.stringify(reservations));
-  }, [reservations]);
-
-  useEffect(() => {
-    localStorage.setItem("reservations_history", JSON.stringify(history));
-  }, [history]);
-
-  useEffect(() => {
-    const checkExpiration = () => {
-      const now = new Date();
-      const limit = setMinutes(setHours(now, 11), 0);
-
-      if (isBefore(limit, now)) {
-        setReservations((prev) => {
-          const toExpire = prev.filter(
-            (res) => res.status === "PENDING" && isSameDay(res.from, now),
-          );
-
-          if (toExpire.length === 0) return prev;
-
-          // Move expired to history
-          setHistory((h) => [
-            ...h,
-            ...toExpire.map((res) => ({ ...res, status: "EXPIRED" as const })),
-          ]);
-
-          return prev.filter(
-            (res) => !(res.status === "PENDING" && isSameDay(res.from, now)),
-          );
-        });
-      }
-    };
-
-    const interval = setInterval(checkExpiration, 60000); // Check every minute
-    checkExpiration();
-    return () => clearInterval(interval);
-  }, []);
-
-  const addReservation = (
-    data: Omit<Reservation, "id" | "userId" | "status" | "createdAt">,
-  ) => {
+  const fetchData = useCallback(async () => {
     if (!user) return;
-
-    const hasOverlap = reservations.some(
-      (r) =>
-        r.userId === user.id &&
-        r.status !== "CANCELLED" &&
-        areIntervalsOverlapping(
-          { start: startOfDay(r.from), end: endOfDay(r.to) },
-          { start: startOfDay(data.from), end: endOfDay(data.to) },
-        ),
-    );
-
-    if (hasOverlap) {
-      alert("Vous avez déjà une réservation sur cette période.");
-      return;
+    setIsLoading(true);
+    try {
+      const [rawReservations, registers, parkings] = await Promise.all([
+        reservationService.findAll(),
+        reservationRegisterService.findAll(),
+        parkingService.findAll(),
+      ]);
+      const enriched = rawReservations.map((res) =>
+        buildEnrichedReservation(res, parkings, registers),
+      );
+      setAllReservations(enriched);
+    } catch (error) {
+      if (error instanceof ApiException) {
+        toast.error(error.message);
+      }
+    } finally {
+      setIsLoading(false);
     }
+  }, [user, reservationService, reservationRegisterService, parkingService]);
 
-    const newReservation: Reservation = {
-      ...data,
-      id: Math.random().toString(36).substr(2, 9),
-      userId: user.id,
-      status: "PENDING",
-      createdAt: new Date(),
-    };
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
-    setReservations((prev) => [...prev, newReservation]);
+  const today = startOfToday();
+  const myReservations = allReservations.filter((r) => r.userId === user?.id);
+  const reservations = myReservations.filter((r) => !isBefore(r.endDate, today));
+  const history = myReservations.filter((r) => isBefore(r.endDate, today));
+
+  const addReservation = async (
+    parkingId: string,
+    startDate: Date,
+    endDate: Date,
+  ) => {
+    try {
+      await reservationService.create({ parkingId, startDate, endDate });
+      await fetchData();
+      toast.success("Réservation créée avec succès");
+    } catch (error) {
+      if (error instanceof ApiException) {
+        toast.error(error.message);
+      }
+    }
   };
 
-  const updateReservation = (id: string, data: Partial<Reservation>) => {
-    setReservations((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, ...data } : r)),
-    );
+  const cancelReservation = async (id: string) => {
+    try {
+      await reservationService.deleteOne(id);
+      setAllReservations((prev) => prev.filter((r) => r.id !== id));
+      toast.success("Réservation annulée");
+    } catch (error) {
+      if (error instanceof ApiException) {
+        toast.error(error.message);
+      }
+    }
   };
 
-  const checkIn = (reservationId: string) => {
-    setReservations((prev) => {
-      const res = prev.find((r) => r.id === reservationId);
-      if (!res) return prev;
-
-      const updated = { ...res, status: "CHECKED_IN" as const };
-      return prev.map((r) => (r.id === reservationId ? updated : r));
-    });
+  const updateReservation = async (id: string, parkingId: string) => {
+    try {
+      await reservationService.updateOne(id, { parkingId });
+      await fetchData();
+      toast.success("Réservation mise à jour");
+    } catch (error) {
+      if (error instanceof ApiException) {
+        toast.error(error.message);
+      }
+    }
   };
 
-  const checkInBySpot = (spotId: string) => {
+  const checkIn = async (reservationId: string) => {
+    try {
+      await reservationRegisterService.create({ reservationId });
+      await fetchData();
+      toast.success("Check-in effectué avec succès");
+    } catch (error) {
+      if (error instanceof ApiException) {
+        toast.error(error.message);
+      }
+    }
+  };
+
+  const checkInBySpot = async (parkingCode: string) => {
     const now = new Date();
-    const res = reservations.find(
+    const res = allReservations.find(
       (r) =>
-        r.spotId === spotId && isSameDay(r.from, now) && r.status === "PENDING",
+        r.parkingCode === parkingCode &&
+        !isBefore(now, startOfDay(r.startDate)) &&
+        !isAfter(now, endOfDay(r.endDate)) &&
+        r.status === "PENDING",
     );
     if (res) {
-      checkIn(res.id);
+      await checkIn(res.id);
     }
   };
 
-  const getReservationBySpot = (spotId: string, date: Date = new Date()) => {
-    return reservations.find(
-      (r) => r.spotId === spotId && isSameDay(r.from, date),
+  const getReservationBySpot = (
+    parkingCode: string,
+    date: Date = new Date(),
+  ) => {
+    return allReservations.find(
+      (r) =>
+        r.parkingCode === parkingCode &&
+        !isBefore(date, startOfDay(r.startDate)) &&
+        !isAfter(date, endOfDay(r.endDate)),
     );
-  };
-
-  const cancelReservation = (reservationId: string) => {
-    setReservations((prev) => {
-      const res = prev.find((r) => r.id === reservationId);
-      if (res) {
-        setHistory((h) => [...h, { ...res, status: "CANCELLED" as const }]);
-      }
-      return prev.filter((r) => r.id !== reservationId);
-    });
   };
 
   const getReservationsByDate = (date: Date) => {
-    return reservations.filter((r) => isSameDay(r.from, date));
+    return allReservations.filter(
+      (r) =>
+        !isBefore(date, startOfDay(r.startDate)) &&
+        !isAfter(date, endOfDay(r.endDate)),
+    );
   };
 
   return (
@@ -205,11 +238,13 @@ const ReservationProvider = ({ children }: { children: React.ReactNode }) => {
       value={{
         reservations,
         history,
+        allReservations,
+        isLoading,
         addReservation,
+        cancelReservation,
         updateReservation,
         checkIn,
         checkInBySpot,
-        cancelReservation,
         getReservationBySpot,
         getReservationsByDate,
       }}

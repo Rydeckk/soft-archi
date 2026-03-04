@@ -42,7 +42,7 @@ import { useAuth } from "@/hooks/useAuth";
 import type { Parking } from "@/lib/types/api/Parking";
 
 const formSchema = z.object({
-  spotId: z.string().min(1, "Veuillez sélectionner une place"),
+  parkingId: z.string().min(1, "Veuillez sélectionner une place"),
   dateRange: z
     .object({
       from: z.date(),
@@ -52,14 +52,13 @@ const formSchema = z.object({
       message: "La date de fin doit être après la date de début",
       path: ["to"],
     }),
-  isElectric: z.boolean(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
 
 interface ReservationDialogProps {
   selectedSpot: Parking | null;
-  onReserved: (data: FormValues) => void;
+  onReserved: (data: { parkingId: string; dateRange: { from: Date; to: Date } }) => void;
 }
 
 export function ReservationDialog({
@@ -74,8 +73,7 @@ export function ReservationDialog({
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      spotId: "",
-      isElectric: false,
+      parkingId: "",
       dateRange: {
         from: new Date(),
         to: new Date(),
@@ -83,15 +81,13 @@ export function ReservationDialog({
     },
   });
 
-  // Update spotId when selectedSpot changes
   useEffect(() => {
     if (selectedSpot) {
-      form.setValue("spotId", selectedSpot.id);
-      form.setValue("isElectric", selectedSpot.hasElectricalTerminal);
+      form.setValue("parkingId", selectedSpot.id);
     }
   }, [selectedSpot, form]);
 
-  function onSubmit(values: z.infer<typeof formSchema>) {
+  function onSubmit(values: FormValues) {
     const diff =
       differenceInDays(values.dateRange.to, values.dateRange.from) + 1;
 
@@ -102,7 +98,7 @@ export function ReservationDialog({
       return;
     }
 
-    onReserved(values);
+    onReserved({ parkingId: values.parkingId, dateRange: values.dateRange });
     setOpen(false);
     form.reset();
   }
@@ -127,8 +123,8 @@ export function ReservationDialog({
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <FormField
               control={form.control}
-              name="spotId"
-              render={({ field }) => (
+              name="parkingId"
+              render={() => (
                 <FormItem>
                   <FormLabel>Place sélectionnée</FormLabel>
                   <FormControl>
@@ -137,7 +133,9 @@ export function ReservationDialog({
                       className="w-full justify-start font-normal"
                       disabled
                     >
-                      {field.value || "Sélectionnez une place sur la carte"}
+                      {selectedSpot
+                        ? `${selectedSpot.code}${selectedSpot.number}`
+                        : "Sélectionnez une place sur la carte"}
                     </Button>
                   </FormControl>
                   <FormMessage />
@@ -195,10 +193,9 @@ export function ReservationDialog({
                         }}
                         onSelect={field.onChange}
                         numberOfMonths={2}
-                        disabled={
-                          (date) =>
-                            isBefore(date, startOfToday()) ||
-                            isBefore(addDays(startOfToday(), 30), date) // Can't book too far in future for this demo
+                        disabled={(date) =>
+                          isBefore(date, startOfToday()) ||
+                          isBefore(addDays(startOfToday(), maxDays - 1), date)
                         }
                       />
                     </PopoverContent>

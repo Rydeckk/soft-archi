@@ -11,8 +11,21 @@ export class ParkingService {
   }
 
   async findAll() {
-    return this.api.request<Parking[]>({
-      path: PARKING_PATH,
+    return this.api.request<Parking[]>({ path: PARKING_PATH });
+  }
+
+  async update(id: string, payload: Partial<Pick<Parking, "number" | "code" | "hasElectricalTerminal">>) {
+    return this.api.request<Parking>({
+      path: `${PARKING_PATH}/${id}`,
+      method: "PATCH",
+      data: payload,
+    });
+  }
+
+  async deleteOne(id: string) {
+    return this.api.request<Parking>({
+      path: `${PARKING_PATH}/${id}`,
+      method: "DELETE",
     });
   }
 }

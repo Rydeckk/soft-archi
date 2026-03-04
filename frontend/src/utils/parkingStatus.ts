@@ -1,3 +1,4 @@
+import { isBefore, isAfter, startOfDay, endOfDay } from "date-fns";
 import type { Parking } from "@/lib/types/api/Parking";
 import type { Reservation } from "@/lib/types/api/Reservation";
 import type { ReservationRegister } from "@/lib/types/api/ReservationRegister";
@@ -18,20 +19,20 @@ export function getSpotStatus(
   reservations: Reservation[],
   reservationRegisters: ReservationRegister[],
 ): SpotStatus {
-  // Trouver les réservations pour ce parking à cette date
+  const targetStart = startOfDay(date);
+  const targetEnd = endOfDay(date);
+
   const relevantReservations = reservations.filter(
     (reservation) =>
       reservation.parkingId === parkingId &&
-      date >= reservation.startDate &&
-      date <= reservation.endDate,
+      !isAfter(startOfDay(new Date(reservation.startDate)), targetEnd) &&
+      !isBefore(endOfDay(new Date(reservation.endDate)), targetStart),
   );
 
-  // Si pas de réservation, la place est disponible
   if (relevantReservations.length === 0) {
     return "available";
   }
 
-  // Vérifier si une des réservations a un registre (occupée)
   const hasCheckIn = relevantReservations.some((reservation) =>
     reservationRegisters.some((reg) => reg.reservationId === reservation.id),
   );

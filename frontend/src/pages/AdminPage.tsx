@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table,
@@ -45,18 +45,30 @@ import {
   Calendar as CalendarIcon,
   XCircle,
   Zap,
+  MapPin,
 } from "lucide-react";
 import { cn } from "@/utils/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { useReservations } from "@/hooks/useReservations";
 import type { CreateUser, User } from "@/lib/types/api/User";
 import { USER_ROLE, type UserRole } from "@/lib/enums/UserRole";
+import type { Parking } from "@/lib/types/api/Parking";
+import { ParkingService } from "@/services/parking/ParkingService";
+import { startOfDay, endOfDay, isBefore, isAfter } from "date-fns";
 
 export function AdminPage() {
   const { users, createUser, deleteUser } = useAuth();
-  const { reservations, cancelReservation } = useReservations();
+  const { allReservations, cancelReservation, updateReservation } = useReservations();
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [parkingRefresh, setParkingRefresh] = useState(0);
+  const [allParkings, setAllParkings] = useState<Parking[]>([]);
 
+  const parkingService = useMemo(() => new ParkingService(), []);
+  useEffect(() => {
+    parkingService.findAll().then(setAllParkings);
+  }, [parkingService]);
+
+  // User dialog
   const [isUserDialogOpen, setIsUserDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [formData, setFormData] = useState<Omit<CreateUser, "password">>({
@@ -65,6 +77,10 @@ export function AdminPage() {
     role: USER_ROLE.EMPLOYEE,
   });
 
+  // Spot dialog
+  const [selectedSpot, setSelectedSpot] = useState<Parking | null>(null);
+  const [newParkingId, setNewParkingId] = useState<string>("");
+
   const handleOpenAddUser = () => {
     setEditingUser(null);
     setFormData({ name: "", email: "", role: "EMPLOYEE" });
@@ -72,16 +88,47 @@ export function AdminPage() {
   };
 
   const handleSaveUser = async () => {
-    await createUser({
-      ...formData,
-      password: formData.email,
-    });
+    await createUser({ ...formData, password: formData.email });
     setIsUserDialogOpen(false);
   };
 
   const getUserName = (userId: string) => {
     return users.find((u) => u.id === userId)?.name || "Inconnu";
   };
+
+  // Find reservation for the selected spot on the selected date
+  const spotReservation = selectedSpot
+    ? allReservations.find(
+        (r) =>
+          r.parkingCode === `${selectedSpot.code}${selectedSpot.number}` &&
+          !isAfter(new Date(r.startDate), endOfDay(selectedDate)) &&
+          !isBefore(new Date(r.endDate), startOfDay(selectedDate)),
+      )
+    : undefined;
+
+  const handleSpotSelect = (spot: Parking) => {
+    setSelectedSpot(spot);
+    setNewParkingId(spot.id);
+  };
+
+  const handleCancelSpotReservation = async () => {
+    if (!spotReservation) return;
+    await cancelReservation(spotReservation.id);
+    setSelectedSpot(null);
+    setParkingRefresh((n) => n + 1);
+  };
+
+  const handleUpdateSpotReservation = async () => {
+    if (!spotReservation || !newParkingId) return;
+    await updateReservation(spotReservation.id, newParkingId);
+    setSelectedSpot(null);
+    setParkingRefresh((n) => n + 1);
+  };
+
+  // Reservations shown in the tab = active ones only (endDate >= today)
+  const activeReservations = allReservations.filter(
+    (r) => !isBefore(r.endDate, startOfDay(new Date())),
+  );
 
   return (
     <div className="space-y-8 pb-10">
@@ -167,7 +214,14 @@ export function AdminPage() {
 
         <TabsContent value="parking" className="space-y-4">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <h2 className="text-xl font-semibold">État du Parking par Date</h2>
+            <div>
+              <h2 className="text-xl font-semibold">
+                État du Parking par Date
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Cliquez sur une place pour voir et gérer sa réservation.
+              </p>
+            </div>
             <div className="flex items-center gap-2">
               <Label htmlFor="date-picker">Date :</Label>
               <Popover>
@@ -199,13 +253,15 @@ export function AdminPage() {
             </div>
           </div>
 
-          <ParkingMap date={selectedDate} />
+          <ParkingMap
+            date={selectedDate}
+            onSpotSelect={handleSpotSelect}
+            refreshTrigger={parkingRefresh}
+          />
         </TabsContent>
 
         <TabsContent value="reservations" className="space-y-4">
-          <h2 className="text-xl font-semibold">
-            Toutes les Réservations Actives
-          </h2>
+          <h2 className="text-xl font-semibold">Réservations Actives</h2>
           <div className="border rounded-md bg-card">
             <Table>
               <TableHeader>
@@ -218,7 +274,7 @@ export function AdminPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {reservations.length === 0 ? (
+                {activeReservations.length === 0 ? (
                   <TableRow>
                     <TableCell
                       colSpan={5}
@@ -228,7 +284,7 @@ export function AdminPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  reservations.map((res) => (
+                  activeReservations.map((res) => (
                     <TableRow key={res.id}>
                       <TableCell className="font-medium">
                         {getUserName(res.userId)}
@@ -236,7 +292,7 @@ export function AdminPage() {
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <Badge variant="outline" className="font-mono">
-                            {res.spotId}
+                            {res.parkingCode}
                           </Badge>
                           {res.isElectric && (
                             <Zap className="h-3 w-3 text-emerald-500 fill-emerald-500" />
@@ -244,8 +300,8 @@ export function AdminPage() {
                         </div>
                       </TableCell>
                       <TableCell className="text-sm">
-                        {format(res.from, "dd/MM/yyyy")} -{" "}
-                        {format(res.to, "dd/MM/yyyy")}
+                        {format(res.startDate, "dd/MM/yyyy")} -{" "}
+                        {format(res.endDate, "dd/MM/yyyy")}
                       </TableCell>
                       <TableCell>
                         <Badge
@@ -344,6 +400,117 @@ export function AdminPage() {
               Annuler
             </Button>
             <Button onClick={handleSaveUser}>Enregistrer</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Spot Reservation Dialog */}
+      <Dialog
+        open={!!selectedSpot}
+        onOpenChange={(open) => !open && setSelectedSpot(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MapPin className="h-4 w-4" />
+              Place{" "}
+              {selectedSpot
+                ? `${selectedSpot.code}${selectedSpot.number}`
+                : ""}
+              {selectedSpot?.hasElectricalTerminal && (
+                <Zap className="h-4 w-4 text-emerald-500 fill-emerald-500" />
+              )}
+            </DialogTitle>
+            <DialogDescription>
+              {format(selectedDate, "EEEE dd MMMM yyyy", { locale: fr })}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-4 space-y-4">
+            {spotReservation ? (
+              <>
+                <div className="space-y-3 rounded-lg border p-4 bg-muted/30">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">Réservée par</span>
+                    <span className="text-sm">
+                      {getUserName(spotReservation.userId)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">Période</span>
+                    <span className="text-sm">
+                      {format(spotReservation.startDate, "dd/MM/yyyy")} →{" "}
+                      {format(spotReservation.endDate, "dd/MM/yyyy")}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">Statut</span>
+                    <Badge
+                      variant={
+                        spotReservation.status === "CHECKED_IN"
+                          ? "default"
+                          : "secondary"
+                      }
+                    >
+                      {spotReservation.status === "CHECKED_IN"
+                        ? "Confirmé"
+                        : "En attente"}
+                    </Badge>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Changer de place</Label>
+                  <Select
+                    value={newParkingId}
+                    onValueChange={setNewParkingId}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Sélectionner une place" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {allParkings.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.code}{p.number}
+                          {p.hasElectricalTerminal ? " ⚡" : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            ) : (
+              <div className="text-center py-6 text-muted-foreground border-2 border-dashed rounded-lg">
+                <MapPin className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                <p className="text-sm">
+                  Aucune réservation pour cette place à cette date.
+                </p>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            {spotReservation && (
+              <Button
+                variant="destructive"
+                className="gap-2 sm:mr-auto"
+                onClick={handleCancelSpotReservation}
+              >
+                <XCircle className="h-4 w-4" />
+                Annuler la réservation
+              </Button>
+            )}
+            <Button variant="outline" onClick={() => setSelectedSpot(null)}>
+              Fermer
+            </Button>
+            {spotReservation && (
+              <Button
+                onClick={handleUpdateSpotReservation}
+                disabled={newParkingId === spotReservation.parkingId}
+              >
+                Enregistrer
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

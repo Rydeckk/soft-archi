@@ -28,9 +28,9 @@ export function CheckInPage() {
 
   const reservation = spotId ? getReservationBySpot(spotId) : undefined;
 
-  const handleCheckIn = () => {
+  const handleCheckIn = async () => {
     if (reservation) {
-      checkIn(reservation.id);
+      await checkIn(reservation.id);
     }
   };
 
@@ -109,7 +109,7 @@ export function CheckInPage() {
                     <div className="flex items-center gap-2 text-sm">
                       <Calendar className="h-4 w-4 text-muted-foreground" />
                       <span>
-                        {format(reservation.from, "EEEE dd MMMM", {
+                        {format(reservation.startDate, "EEEE dd MMMM", {
                           locale: fr,
                         })}
                       </span>
@@ -117,8 +117,8 @@ export function CheckInPage() {
                     <div className="flex items-center gap-2 text-sm">
                       <MapPin className="h-4 w-4 text-muted-foreground" />
                       <span>
-                        Place {reservation.spotId} - Rangée{" "}
-                        {reservation.spotId[0]}
+                        Place {reservation.parkingCode} - Rangée{" "}
+                        {reservation.parkingCode[0]}
                       </span>
                     </div>
                   </div>

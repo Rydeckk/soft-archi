@@ -30,8 +30,8 @@ export class ReservationsController {
 
   @Get()
   @SerializeOptions({ type: ReservationEntity })
-  async findAll(@GetUserPayload('id') userId: string) {
-    return this.reservationsService.findAll(userId);
+  async findAll() {
+    return this.reservationsService.findAll();
   }
 
   @Patch(':id')
